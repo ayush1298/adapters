@@ -48,6 +48,27 @@ RUN set -eux; \
     uv pip install --system --no-cache -r /tmp/judge-requirements.txt; \
     rm /tmp/judge-requirements.txt
 
+# Performance-only fix to the deterministic check "Negatives in parentheses"
+# (judge/detchecks/checks/c65.py, _commit): for every block of failing cells it
+# scans all failing cells of the sheet for the block's first cell, which is
+# quadratic and does not finish on the multi-million-cell workbooks (tasks 85,
+# 89, 99). group_cells() only emits fully populated rectangles covering each
+# cell exactly once, so that cell is always the block's top-left corner; the
+# replacement returns the same value, so every verdict and message is unchanged.
+# The build fails if the upstream line ever differs.
+RUN python3 - <<'EOF'
+from pathlib import Path
+
+path = Path("/opt/mbabench/judge/detchecks/checks/c65.py")
+old = ("ex = repr(by_pos[min(k for k in by_pos "
+       "if b[0] <= k[0] <= b[2] and b[1] <= k[1] <= b[3])])")
+new = "ex = repr(by_pos[(b[0], b[1])])  # harbor adapter: O(1), same cell"
+text = path.read_text()
+if text.count(old) != 1:
+    raise SystemExit(f"{path}: expected exactly one upstream line to patch")
+path.write_text(text.replace(old, new))
+EOF
+
 ENV LIBREOFFICE_PATH=/usr/local/bin/soffice \
     MBABENCH_ROOT=/opt/mbabench \
     PYTHONUNBUFFERED=1

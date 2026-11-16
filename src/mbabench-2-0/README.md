@@ -274,6 +274,14 @@ and parity upload: to be added.
   - An attempt rejected by delivery validation (missing, unreadable or copied-input workbook) scores 0.
     Upstream records it as `agent_failed` without a grading; confirm with the authors that the paper
     counts these as 0.
+- **One performance-only patch to the judge.** The deterministic check *Negatives in parentheses*
+  (`judge/detchecks/checks/c65.py`, `_commit`) finds each failing block's first cell by scanning
+  every failing cell on the sheet. That is quadratic, and on the multi-million-cell workbooks
+  (tasks 85, 89 and 99, with 5-10M cells) it ran for over 80 minutes without finishing. Upstream's
+  `group_cells()` only produces fully populated rectangles that cover each cell once, so that cell is
+  always the block's top-left corner. `tests/Dockerfile` replaces the scan with that direct lookup,
+  which returns the same cell, so every verdict and message is unchanged. The build fails if the
+  upstream line ever differs. This should be reported upstream.
 - **LibreOffice gaps are upstream behaviour.** Many goldens use dynamic-array spill references
   (`A1#`, `ANCHORARRAY`), which LibreOffice 25.8 cannot evaluate. The judge knows these as gap cells.
   Agent workbooks written by openpyxl have no cached values, so the judge recalculates them in
@@ -281,7 +289,14 @@ and parity upload: to be added.
   Checked in the verifier image: LibreOffice agrees with Excel's cached values on 580/580 formula
   cells of the gap-free goldens, and the judge detects the version as 25.8.
 - **Cost and time.** Upstream quotes about $3.5 and 2 minutes per grading with `openai/gpt-5.6-sol`.
-  Large workbooks take much longer (task 85's golden is ~94 MB).
+  Three tasks have multi-million-cell workbooks and grade far slower. Measured locally on their goldens,
+  with the patch above and before any model call (2 CPUs, 8 GB): task 83 (1.7M cells) 9 min, task 85
+  (7.8M) 46 min, task 89 (5.2M) 107 min. The verifier timeout is therefore 3 h; it is a cap, so
+  typical tasks are unaffected.
+- **Task 99 needs more memory than 8 GB.** Its golden has ~10M cells, and upstream's answer check loads
+  each workbook fully with openpyxl, twice. Grading it was killed for lack of memory at both 8 GB and
+  14 GB (peak 13.3 GB). It needs a larger verifier (not measurable on the 16 GB test machine) or must be
+  excluded; this is still open.
 - **Size.** Each task carries its starting workbook twice (`environment/`, `tests/`) and its golden
   twice (`solution/`, `tests/`); the generated 101-task dataset is about 740 MB.
 

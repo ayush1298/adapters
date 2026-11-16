@@ -42,9 +42,11 @@ network_mode = "allowlist"
 allowed_hosts = ["api.anthropic.com", "api.openai.com"]
 
 [verifier]
-# One judge conversation (~2 min upstream) plus LibreOffice recalculations,
-# which the judge retries with doubling timeouts.
-timeout_sec = 3600.0
+# A cap, not a budget: typical tasks grade in minutes (one judge conversation,
+# ~2 min upstream). The multi-million-cell workbooks take far longer before the
+# model is called; task 89's took ~107 min in local measurements. Upstream sets
+# no grading time limit.
+timeout_sec = 10800.0
 environment_mode = "separate"
 
 [verifier.env]
